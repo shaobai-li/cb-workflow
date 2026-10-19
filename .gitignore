@@ -1,8 +1,7 @@
 # Data files (not uploaded)
 data/
 
-# App dependencies and temporary files
-app/**/vendor/
+# App temporary files
 app/**/__pycache__/
 __pycache__/
 *.py[cod]
