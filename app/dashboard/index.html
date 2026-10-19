@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>7SK 数据仪表盘</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='88'%3E%F0%9F%A7%AC%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主内容</a>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">7SK</span>
+    <div class="brand-text">
+      <h1>7SK 数据仪表盘</h1>
+      <p>人源 7SK / P-TEFb / HEXIM 结构与跨物种序列</p>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <span class="live" id="live-status" role="status" aria-live="polite">
+      <span class="live-dot" aria-hidden="true"></span><span id="live-text">连接中…</span>
+    </span>
+    <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换明暗主题" title="切换明暗主题">
+      <span id="theme-icon" aria-hidden="true">◐</span>
+    </button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" aria-label="数据导航">
+    <section class="side-section">
+      <div class="side-heading">
+        <h2>索引</h2>
+        <span class="count" id="index-count"></span>
+      </div>
+      <div class="side-list" id="index-list">
+        <p class="side-empty">读取 index.md…</p>
+      </div>
+    </section>
+
+    <section class="side-section">
+      <div class="side-heading">
+        <h2>数据文件</h2>
+        <span class="count" id="file-count"></span>
+      </div>
+      <div class="side-list" id="file-list">
+        <p class="side-empty">正在扫描 data 目录…</p>
+      </div>
+    </section>
+
+    <footer class="sidebar-footer">
+      <p class="footer-label">数据目录（实时读取）</p>
+      <code id="data-dir">—</code>
+    </footer>
+  </aside>
+
+  <main class="main" id="main">
+    <!-- 欢迎页 -->
+    <section class="welcome" id="welcome">
+      <div class="welcome-head">
+        <p class="eyebrow">数据总览</p>
+        <h2>7SK 结构与跨物种对照数据</h2>
+        <p class="welcome-sub">从左侧选择文件查看。服务直接读取 <code>workspace/data</code>，新增或修改的文件会在几秒内出现在列表里。</p>
+      </div>
+
+      <div class="stat-grid" id="stat-grid">
+        <div class="stat-tile">
+          <p class="stat-label">数据文件</p>
+          <p class="stat-value" id="stat-files">—</p>
+          <p class="stat-note">来自 data 目录</p>
+        </div>
+        <div class="stat-tile">
+          <p class="stat-label">物种</p>
+          <p class="stat-value" id="stat-species">—</p>
+          <p class="stat-note">跨物种对照表</p>
+        </div>
+        <div class="stat-tile">
+          <p class="stat-label">结构链</p>
+          <p class="stat-value" id="stat-chains">—</p>
+          <p class="stat-note" id="stat-chains-note">PDB 模型</p>
+        </div>
+        <div class="stat-tile">
+          <p class="stat-label">原子数</p>
+          <p class="stat-value" id="stat-atoms">—</p>
+          <p class="stat-note" id="stat-atoms-note">PDB 模型</p>
+        </div>
+      </div>
+
+      <div class="card-grid" id="welcome-cards" aria-label="文件入口"></div>
+    </section>
+
+    <!-- CSV 表格视图 -->
+    <section class="view" id="table-view" hidden aria-labelledby="table-title">
+      <div class="view-head">
+        <div>
+          <p class="eyebrow" id="table-kind">数据表</p>
+          <h2 id="table-title">—</h2>
+          <p class="view-meta" id="table-meta"></p>
+        </div>
+        <button class="btn" id="table-reload" type="button">重新读取</button>
+      </div>
+      <div class="notice" id="table-stale" hidden>
+        <span>文件已更新，当前显示的是旧内容。</span>
+        <button class="btn btn-small" id="table-stale-reload" type="button">刷新</button>
+      </div>
+
+      <div class="filterbar" id="table-filters">
+        <label class="filter search">
+          <span class="filter-label">搜索</span>
+          <input id="table-search" type="search" placeholder="物种、分类或登录号…" autocomplete="off">
+        </label>
+        <label class="filter">
+          <span class="filter-label">分类</span>
+          <select id="table-category"><option value="">全部分类</option></select>
+        </label>
+        <label class="filter">
+          <span class="filter-label">排序</span>
+          <select id="table-sort">
+            <option value="original">原始顺序</option>
+            <option value="length-desc">7SK 序列长度 · 从长到短</option>
+            <option value="length-asc">7SK 序列长度 · 从短到长</option>
+            <option value="species-asc">物种名 A→Z</option>
+          </select>
+        </label>
+        <button class="btn btn-ghost" id="table-reset" type="button">重置</button>
+        <span class="result-count" id="table-result-count" role="status" aria-live="polite"></span>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table" id="data-table">
+          <caption class="visually-hidden" id="table-caption">数据表内容</caption>
+        </table>
+      </div>
+    </section>
+
+    <!-- Stockholm 比对视图 -->
+    <section class="view" id="alignment-view" hidden aria-labelledby="alignment-title">
+      <div class="view-head">
+        <div>
+          <p class="eyebrow">序列比对</p>
+          <h2 id="alignment-title">—</h2>
+          <p class="view-meta" id="alignment-meta"></p>
+        </div>
+        <button class="btn" id="alignment-reload" type="button">重新读取</button>
+      </div>
+      <div class="notice" id="alignment-stale" hidden>
+        <span>文件已更新，当前显示的是旧内容。</span>
+        <button class="btn btn-small" id="alignment-stale-reload" type="button">刷新</button>
+      </div>
+
+      <p class="aln-intro">
+        每一行是一条 seed 序列，每一列是一个比对位置。结构行和 RF 行分别给出<strong>共识二级结构</strong>和<strong>共识序列</strong>。
+        把鼠标移到任意一列，会同时高亮与它配对的那一列；上方显示两列各自的碱基计数。
+      </p>
+      <div class="aln-legend">
+        <span class="aln-legend-item"><b class="aln-b-A">A</b></span>
+        <span class="aln-legend-item"><b class="aln-b-C">C</b></span>
+        <span class="aln-legend-item"><b class="aln-b-G">G</b></span>
+        <span class="aln-legend-item"><b class="aln-b-U">U</b></span>
+        <span class="aln-legend-item">– 缺口</span>
+        <span class="aln-legend-item">结构行：<code>&lt; &gt;</code> / <code>( )</code> / <code>[ ]</code> / <code>{ }</code> 表示配对</span>
+      </div>
+      <div class="aln-info" id="alignment-info">把鼠标移到某一列。</div>
+      <div class="aln-wrap">
+        <table id="alignment-table" class="aln-table">
+          <caption class="visually-hidden" id="alignment-caption">Stockholm 序列比对</caption>
+        </table>
+      </div>
+      <p class="aln-note" id="alignment-note"></p>
+    </section>
+
+    <!-- PDB 三维视图 -->
+    <section class="view" id="pdb-view" hidden aria-labelledby="pdb-title">
+      <div class="view-head">
+        <div>
+          <p class="eyebrow">三维结构</p>
+          <h2 id="pdb-title">—</h2>
+          <p class="view-meta" id="pdb-meta"></p>
+        </div>
+        <button class="btn" id="pdb-reload" type="button">重新读取</button>
+      </div>
+      <div class="notice" id="pdb-stale" hidden>
+        <span>文件已更新，当前显示的是旧内容。</span>
+        <button class="btn btn-small" id="pdb-stale-reload" type="button">刷新</button>
+      </div>
+
+      <div class="pdb-layout">
+        <div class="pdb-stage">
+          <div class="pdb-toolbar" role="toolbar" aria-label="结构显示选项">
+            <label class="tool">
+              <span class="filter-label">表示方式</span>
+              <select id="pdb-rep">
+                <option value="cartoon">Cartoon</option>
+                <option value="stick">Stick</option>
+                <option value="sphere">Sphere</option>
+              </select>
+            </label>
+            <button class="btn btn-small" id="pdb-spin" type="button" aria-pressed="false">旋转</button>
+            <button class="btn btn-small" id="pdb-reset" type="button">重置视角</button>
+            <button class="btn btn-small" id="pdb-shot" type="button">保存图片</button>
+          </div>
+          <div class="pdb-canvas-wrap">
+            <div id="pdb-canvas" class="pdb-canvas" aria-label="三维结构视图"></div>
+            <div class="pdb-loading" id="pdb-loading">正在加载结构…</div>
+            <div class="pdb-error" id="pdb-error" hidden></div>
+          </div>
+        </div>
+
+        <aside class="pdb-legend" aria-label="链图例">
+          <div class="legend-head">
+            <h3>链组成</h3>
+            <span class="count" id="pdb-chain-count"></span>
+          </div>
+          <p class="legend-hint">勾选可显示或隐藏对应链。</p>
+          <div id="pdb-legend-list" class="legend-list"></div>
+          <div class="legend-note" id="pdb-legend-note"></div>
+        </aside>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="vendor/3dmol.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

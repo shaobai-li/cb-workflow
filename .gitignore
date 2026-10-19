@@ -1,0 +1,17 @@
+# Data files (not uploaded)
+data/
+
+# App dependencies and temporary files
+app/**/vendor/
+app/**/__pycache__/
+__pycache__/
+*.py[cod]
+
+# Environment and local config
+.env
+.env.*
+
+# OS / editor temp files
+.DS_Store
+Thumbs.db
+*.log
