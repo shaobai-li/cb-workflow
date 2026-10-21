@@ -15,7 +15,7 @@
     <span class="brand-mark" aria-hidden="true">7SK</span>
     <div class="brand-text">
       <h1>7SK 数据仪表盘</h1>
-      <p>人源 7SK / P-TEFb / HEXIM 结构与跨物种序列</p>
+      <p>人源 7SK 复合物结构、Pfam 注释与跨物种序列</p>
     </div>
   </div>
   <div class="topbar-actions">
@@ -29,25 +29,15 @@
 </header>
 
 <div class="layout">
-  <aside class="sidebar" aria-label="数据导航">
+  <aside class="sidebar" aria-label="视图导航">
     <section class="side-section">
       <div class="side-heading">
-        <h2>索引</h2>
-        <span class="count" id="index-count"></span>
+        <h2>视图</h2>
+        <span class="count" id="view-count"></span>
       </div>
-      <div class="side-list" id="index-list">
-        <p class="side-empty">读取 index.md…</p>
-      </div>
-    </section>
-
-    <section class="side-section">
-      <div class="side-heading">
-        <h2>数据文件</h2>
-        <span class="count" id="file-count"></span>
-      </div>
-      <div class="side-list" id="file-list">
-        <p class="side-empty">正在扫描 data 目录…</p>
-      </div>
+      <nav class="side-nav" id="view-nav" aria-label="可视化视图">
+        <p class="side-empty">正在加载视图…</p>
+      </nav>
     </section>
 
     <footer class="sidebar-footer">
@@ -171,7 +161,7 @@
       <p class="aln-note" id="alignment-note"></p>
     </section>
 
-    <!-- PDB 三维视图 -->
+    <!-- PDB 三维视图 + Pfam 注释 -->
     <section class="view" id="pdb-view" hidden aria-labelledby="pdb-title">
       <div class="view-head">
         <div>
@@ -187,7 +177,15 @@
       </div>
 
       <div class="pdb-layout">
-        <div class="pdb-stage">
+        <div class="pdb-panel pdb-structure">
+          <div class="panel-head">
+            <div>
+              <h3>整体结构</h3>
+              <p class="panel-sub">拖动旋转 · 滚轮缩放</p>
+            </div>
+            <span class="count" id="pdb-chain-count"></span>
+          </div>
+
           <div class="pdb-toolbar" role="toolbar" aria-label="结构显示选项">
             <label class="tool">
               <span class="filter-label">表示方式</span>
@@ -206,18 +204,41 @@
             <div class="pdb-loading" id="pdb-loading">正在加载结构…</div>
             <div class="pdb-error" id="pdb-error" hidden></div>
           </div>
+
+          <div class="pdb-legend pdb-legend-inline" aria-label="链组成">
+            <div class="legend-head">
+              <h3>链组成</h3>
+              <span class="legend-hint">勾选可显示或隐藏对应链</span>
+            </div>
+            <div id="pdb-legend-list" class="legend-list"></div>
+            <div class="legend-note" id="pdb-legend-note"></div>
+          </div>
         </div>
 
-        <aside class="pdb-legend" aria-label="链图例">
-          <div class="legend-head">
-            <h3>链组成</h3>
-            <span class="count" id="pdb-chain-count"></span>
+        <aside class="pdb-panel pdb-pfam" aria-label="Pfam 结构域信息">
+          <div class="panel-head">
+            <div>
+              <h3>Pfam 结构域</h3>
+              <p class="panel-sub">点击域在结构中高亮</p>
+            </div>
+            <span class="count" id="pfam-count"></span>
           </div>
-          <p class="legend-hint">勾选可显示或隐藏对应链。</p>
-          <div id="pdb-legend-list" class="legend-list"></div>
-          <div class="legend-note" id="pdb-legend-note"></div>
+
+          <div class="pfam-controls">
+            <label class="pfam-toggle" title="开启后按 Pfam 域着色，域外残基显示为灰色；RNA 保持组分色">
+              <input type="checkbox" id="pfam-color-toggle">
+              <span>按 Pfam 着色</span>
+            </label>
+            <button class="btn btn-small" id="pfam-clear" type="button" disabled>清除高亮</button>
+          </div>
+
+          <div class="pfam-tracks" id="pfam-tracks">
+            <p class="side-empty">读取 Pfam 注释…</p>
+          </div>
+          <p class="pfam-note" id="pfam-note"></p>
         </aside>
       </div>
+      <div class="pfam-tooltip" id="pfam-tooltip" hidden></div>
     </section>
   </main>
 </div>

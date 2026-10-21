@@ -389,12 +389,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if not target:
                 self._send_json({"error": "文件不存在"}, 404)
                 return
-            ctype = {
-                "structure": "chemical/x-pdb; charset=utf-8",
-                "table": "text/csv; charset=utf-8",
-                "alignment": "text/plain; charset=utf-8",
-                "text": "text/plain; charset=utf-8",
-            }.get(file_type(target), "application/octet-stream")
+            ctype = (
+                "application/json; charset=utf-8"
+                if target.suffix.lower() == ".json"
+                else {
+                    "structure": "chemical/x-pdb; charset=utf-8",
+                    "table": "text/csv; charset=utf-8",
+                    "alignment": "text/plain; charset=utf-8",
+                    "text": "text/plain; charset=utf-8",
+                }.get(file_type(target), "application/octet-stream")
+            )
             self._send_file(target, ctype)
             return
 

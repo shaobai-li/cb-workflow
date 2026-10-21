@@ -7,7 +7,6 @@ const state = {
   indexEntries: [],
   dataDir: "",
   fileSignature: "",
-  statsSignature: "",
   selected: null,
   csv: null,
   csvFile: null,
@@ -22,15 +21,18 @@ const state = {
   hiddenChains: new Set(),
   rep: "cartoon",
   spinning: false,
+  pfam: null,
+  pfamError: null,
+  selectedDomain: null,
+  pfamColor: false,
   toastTimer: null,
   firstFilesLoad: true,
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
-const FILE_ICON = { structure: "◈", table: "▦", alignment: "≡", text: "▤", other: "▪" };
-const FILE_KIND = { structure: "结构", table: "数据表", alignment: "比对", text: "文本", other: "文件" };
 const PROTEINS = ["CCNT1", "CDK9", "MEPCE", "LARP7", "HEXIM1"];
+const PFAM_DATA_FILE = "human_pfam_domains.json";
 
 /* ---------- 工具函数 ---------- */
 
@@ -158,16 +160,9 @@ async function loadFiles() {
     state.firstFilesLoad = false;
 
     $("#data-dir").textContent = state.dataDir || "—";
-    $("#file-count").textContent = `${state.files.length}`;
 
-    renderFileList();
-    renderWelcomeCards();
+    renderViewNav();
     updateStaleNotices();
-
-    if (changed || state.statsSignature !== sig) {
-      state.statsSignature = sig;
-      loadWelcomeStats();
-    }
   } catch (err) {
     setLive(false);
     console.error(err);
@@ -178,11 +173,8 @@ async function loadIndex() {
   try {
     const data = await api("/api/index");
     state.indexEntries = data.entries || [];
-    renderIndexList();
-    renderWelcomeCards();
   } catch (err) {
     console.error(err);
-    $("#index-list").replaceChildren(el("p", "side-empty", "index.md 读取失败"));
   }
 }
 
@@ -190,146 +182,36 @@ function indexEntryFor(name) {
   return state.indexEntries.find((entry) => entry.file === name) || null;
 }
 
-function renderIndexList() {
-  const list = $("#index-list");
-  list.replaceChildren();
-  $("#index-count").textContent = `${state.indexEntries.length}`;
+function viewNavItems() {
+  const items = [];
+  const structure = state.files.find((file) => file.type === "structure");
+  if (structure) items.push({ label: "结构", file: structure });
+  const table = state.files.find((file) => file.type === "table");
+  if (table) items.push({ label: "物种对照表", file: table });
+  const alignment = state.files.find((file) => file.type === "alignment");
+  if (alignment) items.push({ label: "7SK 序列比对", file: alignment });
+  return items;
+}
 
-  if (!state.indexEntries.length) {
-    list.append(el("p", "side-empty", "index.md 中暂无条目"));
+function renderViewNav() {
+  const nav = $("#view-nav");
+  const items = viewNavItems();
+  nav.replaceChildren();
+  $("#view-count").textContent = `${items.length}`;
+
+  if (!items.length) {
+    nav.append(el("p", "side-empty", "data 目录中暂无可用视图"));
     return;
   }
 
-  for (const entry of state.indexEntries) {
-    const item = el("button", "file-item" + (entry.exists ? "" : " is-missing"));
-    item.type = "button";
-    item.title = entry.exists ? `打开 ${entry.file}` : "对应文件不存在";
-
-    const icon = el("span", "file-icon", "▤");
-    icon.setAttribute("aria-hidden", "true");
-    const body = el("span", "file-body");
-    body.append(el("span", "file-name", entry.label));
-    if (entry.description) body.append(el("span", "file-desc", entry.description));
-    body.append(el("span", "file-meta", entry.exists ? "在 data 目录中" : "文件缺失"));
-    item.append(icon, body);
-
-    item.addEventListener("click", () => {
-      if (!entry.exists) {
-        showToast("索引指向的文件不在 data 目录中", true);
-        return;
-      }
-      const file = state.files.find((f) => f.name === entry.file);
-      if (file) openFile(file);
-      else showToast("文件尚未被扫描到，请稍后重试", true);
-    });
-    list.append(item);
-  }
-}
-
-function renderFileList() {
-  const list = $("#file-list");
-  list.replaceChildren();
-  if (!state.files.length) {
-    list.append(el("p", "side-empty", "data 目录中暂无文件"));
-    return;
-  }
-
-  for (const file of state.files) {
-    const entry = indexEntryFor(file.name);
-    const item = el("button", "file-item" + (state.selected?.name === file.name ? " is-active" : ""));
-    item.type = "button";
-    item.dataset.name = file.name;
-
-    const icon = el("span", "file-icon", FILE_ICON[file.type] || "▪");
-    icon.setAttribute("aria-hidden", "true");
-
-    const body = el("span", "file-body");
-    body.append(el("span", "file-name", file.name));
-    body.append(el("span", "file-meta", `${FILE_KIND[file.type] || "文件"} · ${fmtBytes(file.size)} · ${fmtDate(file.mtime)}`));
-    if (entry?.description) body.append(el("span", "file-desc", entry.description));
-
-    item.append(icon, body);
-    item.addEventListener("click", () => openFile(file));
-    list.append(item);
-  }
-}
-
-function renderWelcomeCards() {
-  const grid = $("#welcome-cards");
-  grid.replaceChildren();
-
-  const cards = [];
-  const seen = new Set();
-  for (const entry of state.indexEntries) {
-    if (entry.exists && !seen.has(entry.file)) {
-      seen.add(entry.file);
-      cards.push({ file: entry.file, description: entry.description, label: entry.label });
-    }
-  }
-  for (const file of state.files) {
-    if (!seen.has(file.name)) {
-      seen.add(file.name);
-      cards.push({ file: file.name, description: indexEntryFor(file.name)?.description || "", label: file.name });
-    }
-  }
-
-  if (!cards.length) {
-    grid.append(el("p", "side-empty", "data 目录中暂无可用文件。"));
-    return;
-  }
-
-  for (const card of cards) {
-    const file = state.files.find((f) => f.name === card.file);
-    if (!file) continue;
-
-    const node = el("article", "file-card");
-    node.append(el("h3", null, card.label));
-    if (card.description) node.append(el("p", "desc", card.description));
-
-    const meta = el("p", "meta");
-    meta.textContent = `${FILE_KIND[file.type] || "文件"} · ${fmtBytes(file.size)} · 更新于 ${fmtDate(file.mtime)}`;
-    node.append(meta);
-
-    const foot = el("div", "card-foot");
-    const open = el("button", "btn btn-small", file.type === "structure" ? "查看结构" : "打开数据");
-    open.type = "button";
-    open.addEventListener("click", () => openFile(file));
-    foot.append(open, el("span", "meta", file.name));
-    node.append(foot);
-    grid.append(node);
-  }
-}
-
-async function loadWelcomeStats() {
-  $("#stat-files").textContent = String(state.files.length);
-
-  const csvFile = state.files.find((f) => f.type === "table");
-  if (csvFile) {
-    try {
-      const data = await api(`/api/csv/${encodeURIComponent(csvFile.name)}`);
-      $("#stat-species").textContent = String(data.rows.length);
-    } catch {
-      $("#stat-species").textContent = "—";
-    }
-  } else {
-    $("#stat-species").textContent = "—";
-  }
-
-  const pdbFile = state.files.find((f) => f.type === "structure");
-  if (pdbFile) {
-    try {
-      const meta = await api(`/api/pdb/${encodeURIComponent(pdbFile.name)}`);
-      $("#stat-chains").textContent = String(meta.chains.length);
-      $("#stat-atoms").textContent = fmtNumber(meta.atoms);
-      $("#stat-chains-note").textContent = pdbFile.name;
-      $("#stat-atoms-note").textContent = pdbFile.name;
-    } catch {
-      $("#stat-chains").textContent = "—";
-      $("#stat-atoms").textContent = "—";
-    }
-  } else {
-    $("#stat-chains").textContent = "—";
-    $("#stat-atoms").textContent = "—";
+  for (const item of items) {
+    const active = state.selected?.name === item.file.name;
+    const button = el("button", "side-nav-item" + (active ? " is-active" : ""), item.label);
+    button.type = "button";
+    button.title = item.file.name;
+    if (active) button.setAttribute("aria-current", "page");
+    button.addEventListener("click", () => openFile(item.file));
+    nav.append(button);
   }
 }
 
@@ -355,7 +237,7 @@ function showView(name) {
 
 function openFile(file) {
   state.selected = file;
-  renderFileList();
+  renderViewNav();
   history.replaceState(null, "", `#${encodeURIComponent(file.name)}`);
   if (file.type === "table") {
     openTable(file);
@@ -798,7 +680,10 @@ async function openPdb(file) {
   }
 
   try {
-    const meta = await api(`/api/pdb/${encodeURIComponent(file.name)}`);
+    const [meta, pfam] = await Promise.all([
+      api(`/api/pdb/${encodeURIComponent(file.name)}`),
+      loadPfamData(),
+    ]);
     state.pdb = meta;
     state.pdbFile = file;
     state.hiddenChains.clear();
@@ -817,6 +702,7 @@ async function openPdb(file) {
       : "按组分着色，同一组分的多个拷贝共享颜色。勾选左侧链可单独查看。";
 
     renderPdbLegend(meta);
+    renderPfamPanel(pfam, file.name);
     ensureViewer();
     state.viewer.resize();
     await loadModel(file);
@@ -827,6 +713,213 @@ async function openPdb(file) {
     $("#pdb-error").textContent = `结构读取失败：${err.message}`;
     showToast(err.message, true);
   }
+}
+
+async function loadPfamData() {
+  if (state.pfam) return state.pfam;
+  try {
+    const res = await fetch(`/data/${PFAM_DATA_FILE}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`Pfam 数据请求失败 (${res.status})`);
+    state.pfam = await res.json();
+    return state.pfam;
+  } catch (err) {
+    console.error(err);
+    state.pfamError = err.message;
+    return null;
+  }
+}
+
+function domainKey(protein, domain) {
+  return `${protein.name}:${domain.pfam}`;
+}
+
+function domainColor(slot) {
+  return cssVar(`--domain-${Math.min(Math.max(slot || 8, 1), 8)}`);
+}
+
+function pfamProteinForChain(chainId) {
+  return state.pfam?.proteins.find((protein) =>
+    protein.chains.some((chain) => chain.id === chainId)
+  ) || null;
+}
+
+function unionSegments(protein) {
+  const nums = new Set();
+  for (const chain of protein.chains) {
+    for (const [start, end] of chain.segments) {
+      for (let n = start; n <= end; n += 1) nums.add(n);
+    }
+  }
+  const out = [];
+  for (const n of [...nums].sort((a, b) => a - b)) {
+    if (out.length && n === out[out.length - 1][1] + 1) out[out.length - 1][1] = n;
+    else out.push([n, n]);
+  }
+  return out;
+}
+
+function renderPfamPanel(pfam, pdbName) {
+  const tracks = $("#pfam-tracks");
+  tracks.replaceChildren();
+  state.selectedDomain = null;
+  state.pfamColor = false;
+  $("#pfam-color-toggle").checked = false;
+  $("#pfam-color-toggle").disabled = false;
+  $("#pfam-clear").disabled = true;
+
+  if (!pfam) {
+    $("#pfam-count").textContent = "—";
+    $("#pfam-color-toggle").disabled = true;
+    tracks.append(el("p", "side-empty", state.pfamError || "Pfam 注释读取失败"));
+    $("#pfam-note").textContent = "未找到 Pfam 数据文件。";
+    return;
+  }
+
+  if (pfam.pdb && pfam.pdb !== pdbName) {
+    $("#pfam-count").textContent = "—";
+    $("#pfam-color-toggle").disabled = true;
+    tracks.append(el("p", "side-empty", `Pfam 数据对应 ${pfam.pdb}，与当前结构不匹配。`));
+    $("#pfam-note").textContent = "";
+    return;
+  }
+
+  const domains = pfam.proteins.reduce((sum, protein) => sum + protein.domains.length, 0);
+  $("#pfam-count").textContent = `${pfam.proteins.length} 个蛋白 · ${domains} 个域`;
+  for (const protein of pfam.proteins) tracks.append(buildPfamProtein(protein));
+  syncPfamSelection();
+}
+
+function buildPfamProtein(protein) {
+  const wrap = el("section", "pfam-protein");
+  const head = el("div", "pfam-protein-head");
+  head.append(el("span", "pfam-protein-name", protein.name));
+  const chainIds = protein.chains.map((chain) => chain.id).join("/");
+  head.append(el("span", "pfam-protein-meta", `链 ${chainIds} · ${fmtNumber(protein.length)} aa`));
+  wrap.append(head);
+
+  const track = el("div", "pfam-track");
+  track.setAttribute("role", "group");
+  track.setAttribute("aria-label", `${protein.name} Pfam 结构域`);
+  track.append(el("span", "pfam-track-rail"));
+  for (const [start, end] of unionSegments(protein)) {
+    const segment = el("span", "pfam-modeled");
+    segment.style.left = `${((start - 1) / protein.length) * 100}%`;
+    segment.style.width = `${((end - start + 1) / protein.length) * 100}%`;
+    segment.title = `已建模 ${start}–${end}`;
+    track.append(segment);
+  }
+
+  const list = el("div", "pfam-domain-list");
+  for (const domain of protein.domains) {
+    const key = domainKey(protein, domain);
+    const color = domainColor(domain.colorSlot);
+
+    const box = el("button", "pfam-domain-box");
+    box.type = "button";
+    box.dataset.domainKey = key;
+    box.style.left = `${((domain.start - 1) / protein.length) * 100}%`;
+    box.style.width = `${((domain.end - domain.start + 1) / protein.length) * 100}%`;
+    box.style.setProperty("--domain-color", color);
+    box.setAttribute("aria-label", `${protein.name} ${domain.pfam} ${domain.nameZh} ${domain.start}–${domain.end}`);
+    box.addEventListener("click", () => toggleDomain(protein, domain));
+    bindPfamTooltip(box, protein, domain);
+    track.append(box);
+
+    const row = el("button", "pfam-domain-row");
+    row.type = "button";
+    row.dataset.domainKey = key;
+    row.style.setProperty("--domain-color", color);
+    row.title = domain.name;
+
+    const swatch = el("span", "pfam-swatch");
+    swatch.setAttribute("aria-hidden", "true");
+    const main = el("span", "pfam-row-main");
+    const title = el("span", "pfam-row-title");
+    title.append(el("code", null, domain.pfam), document.createTextNode(` · ${domain.nameZh}`));
+    const coverage = Math.round(domain.coverage * 100);
+    const meta = el("span", "pfam-row-meta",
+      `${domain.start}–${domain.end} · ${domain.length} aa · 已建模 ${coverage}%`);
+    main.append(title, meta);
+    row.append(swatch, main);
+    row.addEventListener("click", () => toggleDomain(protein, domain));
+    bindPfamTooltip(row, protein, domain);
+    list.append(row);
+  }
+
+  wrap.append(track, list);
+  return wrap;
+}
+
+function bindPfamTooltip(node, protein, domain) {
+  const tip = $("#pfam-tooltip");
+  const coverage = Math.round(domain.coverage * 100);
+  const text = `${protein.name} · ${domain.pfam} · ${domain.nameZh}\n`
+    + `${domain.name}\n`
+    + `${domain.start}–${domain.end} aa（${domain.length} aa）\n`
+    + `已建模 ${domain.modeled}/${domain.length}（${coverage}%）`;
+  const place = (clientX, clientY) => {
+    const pad = 14;
+    const rect = tip.getBoundingClientRect();
+    let x = clientX + pad;
+    let y = clientY + pad;
+    if (x + rect.width > window.innerWidth - 8) x = clientX - rect.width - pad;
+    if (y + rect.height > window.innerHeight - 8) y = clientY - rect.height - pad;
+    tip.style.left = `${Math.max(8, x)}px`;
+    tip.style.top = `${Math.max(8, y)}px`;
+  };
+  const show = (clientX, clientY) => {
+    tip.textContent = text;
+    tip.hidden = false;
+    place(clientX, clientY);
+  };
+  node.addEventListener("mouseenter", (event) => show(event.clientX, event.clientY));
+  node.addEventListener("mousemove", (event) => place(event.clientX, event.clientY));
+  node.addEventListener("mouseleave", () => { tip.hidden = true; });
+  node.addEventListener("focus", () => {
+    const rect = node.getBoundingClientRect();
+    show(rect.left + rect.width / 2, rect.bottom);
+  });
+  node.addEventListener("blur", () => { tip.hidden = true; });
+}
+
+function toggleDomain(protein, domain) {
+  const key = domainKey(protein, domain);
+  if (state.selectedDomain?.key === key) {
+    state.selectedDomain = null;
+  } else {
+    state.selectedDomain = { key, protein, domain };
+    const visible = protein.chains.some((chain) => !state.hiddenChains.has(chain.id));
+    if (!visible) showToast(`${protein.name} 所在的链已隐藏，勾选链后可看到高亮`, true);
+  }
+  syncPfamSelection();
+  applyModelStyle();
+}
+
+function syncPfamSelection() {
+  const key = state.selectedDomain?.key || null;
+  document.querySelectorAll("#pfam-tracks [data-domain-key]").forEach((node) => {
+    const on = node.dataset.domainKey === key;
+    node.classList.toggle("is-selected", on);
+    node.setAttribute("aria-pressed", String(on));
+  });
+  $("#pfam-clear").disabled = !key;
+  setPfamNote(state.selectedDomain);
+}
+
+function setPfamNote(selection) {
+  const note = $("#pfam-note");
+  if (!selection) {
+    note.textContent = state.pfamColor
+      ? "已按 Pfam 域着色，域外残基显示为灰色；RNA 保持组分色。"
+      : "坐标来自 Pfam/InterPro；轨道下方细条表示 PDB 已建模区段。点击域以在结构中高亮。";
+    return;
+  }
+  const { protein, domain } = selection;
+  const coverage = Math.round(domain.coverage * 100);
+  const chains = protein.chains.map((chain) => chain.id).join("/");
+  note.textContent =
+    `${protein.name}（链 ${chains}）· ${domain.pfam} · ${domain.nameZh} · ` +
+    `${domain.start}–${domain.end} aa · 已建模 ${domain.modeled}/${domain.length}（${coverage}%）`;
 }
 
 function renderPdbLegend(meta) {
@@ -894,31 +987,74 @@ function repSpec(rep) {
   return { cartoon: {} };
 }
 
+function styleForColor(color) {
+  const style = repSpec(state.rep);
+  if (style.cartoon) style.cartoon.color = color;
+  else if (style.stick) style.stick.color = color;
+  else if (style.sphere) style.sphere.color = color;
+  return style;
+}
+
+function addOpacity(style, opacity) {
+  if (style.cartoon) style.cartoon.opacity = opacity;
+  else if (style.stick) style.stick.opacity = opacity;
+  else if (style.sphere) style.sphere.opacity = opacity;
+  return style;
+}
+
+function highlightStyle(domain) {
+  const color = domainColor(domain.colorSlot);
+  const style = styleForColor(color);
+  if (style.cartoon) style.stick = { color, radius: 0.18 };
+  else if (style.stick) style.stick.radius = 0.28;
+  else if (style.sphere) style.sphere.scale = 0.38;
+  return style;
+}
+
 function applyModelStyle() {
   if (!state.viewer || !state.model || !state.pdb) return;
   const viewer = state.viewer;
-  const base = repSpec(state.rep);
+  const selection = state.selectedDomain;
+  const pfamMode = Boolean(state.pfamColor && state.pfam);
 
   viewer.setStyle({}, {});
   for (const chain of state.pdb.chains) {
-    const visible = !state.hiddenChains.has(chain.id);
-    if (!visible) {
+    if (state.hiddenChains.has(chain.id)) {
       viewer.setStyle({ chain: chain.id }, {});
       continue;
     }
-    const color = seriesColor(chain.slot);
-    const style = structuredClone(base);
-    if (style.cartoon) {
-      style.cartoon.color = color;
-      if (chain.kind === "rna") {
-        style.stick = { color, radius: 0.12 };
-      }
-    } else if (style.stick) {
-      style.stick.color = color;
-    } else if (style.sphere) {
-      style.sphere.color = color;
+
+    const protein = pfamMode ? pfamProteinForChain(chain.id) : null;
+    const isSelectedChain = Boolean(
+      selection && selection.protein.chains.some((copy) => copy.id === chain.id)
+    );
+    const base = (pfamMode && chain.kind === "protein" && protein)
+      ? styleForColor(cssVar("--pfam-outside"))
+      : styleForColor(seriesColor(chain.slot));
+
+    if (chain.kind === "rna" && base.cartoon) {
+      base.stick = { color: base.cartoon.color, radius: 0.12 };
     }
-    viewer.setStyle({ chain: chain.id }, style);
+    if (selection) addOpacity(base, 0.25);
+    viewer.setStyle({ chain: chain.id }, base);
+
+    if (pfamMode && chain.kind === "protein" && protein) {
+      for (const domain of protein.domains) {
+        const style = styleForColor(domainColor(domain.colorSlot));
+        if (selection && !isSelectedChain) addOpacity(style, 0.25);
+        viewer.setStyle(
+          { chain: chain.id, resi: `${domain.start}-${domain.end}` },
+          style
+        );
+      }
+    }
+
+    if (isSelectedChain) {
+      viewer.setStyle(
+        { chain: chain.id, resi: `${selection.domain.start}-${selection.domain.end}` },
+        highlightStyle(selection.domain)
+      );
+    }
   }
   viewer.render();
 }
@@ -1010,6 +1146,18 @@ function bindEvents() {
   $("#pdb-reset").addEventListener("click", resetView);
   $("#pdb-shot").addEventListener("click", saveScreenshot);
 
+  $("#pfam-color-toggle").addEventListener("change", (event) => {
+    state.pfamColor = event.target.checked;
+    state.selectedDomain = null;
+    syncPfamSelection();
+    applyModelStyle();
+  });
+  $("#pfam-clear").addEventListener("click", () => {
+    state.selectedDomain = null;
+    syncPfamSelection();
+    applyModelStyle();
+  });
+
   window.addEventListener("hashchange", handleHash);
   window.addEventListener("resize", () => {
     if (state.viewer) state.viewer.resize();
@@ -1026,8 +1174,15 @@ function handleHash() {
 async function init() {
   initTheme();
   bindEvents();
-  await Promise.all([loadFiles(), loadIndex()]);
-  handleHash();
+  await Promise.all([loadFiles(), loadIndex(), loadPfamData()]);
+
+  if (location.hash) {
+    handleHash();
+  } else {
+    const structure = state.files.find((file) => file.type === "structure");
+    if (structure) openFile(structure);
+  }
+
   setInterval(() => {
     loadFiles();
     loadIndex();
